@@ -88,11 +88,11 @@
   {$define VER210ORGREATER}
 {$ifend}
 
-{$if defined(VER230) or defined(VER240)  or defined(VER250) or
-     defined(VER260) or defined(VER270)  or defined(VER280)}
+//{$if defined(VER230) or defined(VER240)  or defined(VER250) or
+//     defined(VER260) or defined(VER270)  or defined(VER280)}
   {$define VER210ORGREATER}
   {$define VER230ORGREATER}
-{$ifend}
+//{$ifend}
 
 {$if defined(FPC) or defined(VER170) or defined(VER180) or defined(VER190)
   or defined(VER200) or defined(VER210ORGREATER)}
@@ -1467,6 +1467,7 @@ end;
 function serialfromboolean(ctx: TSuperRttiContext; const obj: ISuperObject; var Value: TValue): Boolean;
 var
   o: ISuperObject;
+  s: String;
 begin
   case ObjectGetType(obj) of
   stBoolean:
@@ -1484,7 +1485,23 @@ begin
       o := SO(obj.AsString);
       if not ObjectIsType(o, stString) then
         Result := serialfromboolean(ctx, SO(obj.AsString), Value) else
-        Result := False;
+        begin
+          s := o.AsString;
+          s := UpperCase(s.Trim([' ',#9, '"', #39]));
+          if (S = 'TRUE') or (S = '1') then
+          begin
+            TValueData(Value).FAsSLong := 1;
+            Result := True
+          end
+          else
+          if (S = 'FALSE') or (S = '0') then
+          begin
+            TValueData(Value).FAsSLong := 0;
+            Result := True
+          end
+          else
+            Result := false;
+        end;
     end;
   else
     Result := False;
@@ -5979,7 +5996,10 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
   procedure FromInt(const obj: ISuperObject);
   var
     TypeData: PTypeData;
-    i: Integer;
+//DWF:
+    //i: Integer;
+    i: NativeInt;
+///DWF
     o: ISuperObject;
   begin
     case ObjectGetType(obj) of
@@ -6080,21 +6100,22 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
   var
     f: TRttiField;
     v: TValue;
+    b: boolean;
   begin
     case ObjectGetType(obj) of
       stObject:
         begin
-          Result := True;
+          Result := false;
           if Value.Kind <> tkClass then
             Value := GetTypeData(TypeInfo).ClassType.Create;
           for f in Context.GetType(Value.AsObject.ClassType).GetFields do
             if f.FieldType <> nil then
             begin
               v := TValue.Empty;
-              Result := FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
-              if Result then
-                f.SetValue(Value.AsObject, v) else
-                Exit;
+              b :=  FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
+              if b then
+                f.SetValue(Value.AsObject, v);
+              Result := Result or b;
             end;
         end;
       stNull:
@@ -6114,36 +6135,46 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
     f: TRttiField;
     p: Pointer;
     v: TValue;
+    b: boolean;
   begin
-    Result := True;
+    Result := false;
     TValue.Make(nil, TypeInfo, Value);
-    for f in Context.GetType(TypeInfo).GetFields do
-    begin
-      if ObjectIsType(obj, stObject) and (f.FieldType <> nil) then
-      begin
-{$IFDEF VER210}
-        p := IValueData(TValueData(Value).FHeapData).GetReferenceToRawData;
-{$ELSE}
-        p := TValueData(Value).FValueData.GetReferenceToRawData;
-{$ENDIF}
-        Result := FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
-        if Result then
-          f.SetValue(p, v) else
+    case ObjectGetType(obj) of
+      stObject:
+          for f in Context.GetType(TypeInfo).GetFields do
           begin
-            //Writeln(f.Name);
-            Exit;
+            if (f.FieldType <> nil) then
+            begin
+              {$IFDEF VER210}
+              p := IValueData(TValueData(Value).FHeapData).GetReferenceToRawData;
+             {$ELSE}
+              p := TValueData(Value).FValueData.GetReferenceToRawData;
+             {$ENDIF}
+              b := FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
+              if b then
+                f.SetValue(p, v);
+              Result := Result or b;
+            end;
           end;
-      end else
-      begin
-        Result := False;
-        Exit;
-      end;
+      stNull:
+        begin
+          Value := nil;
+          Result := True;
+        end
+      else
+        begin
+          Value := nil;
+          Result := False;
+        end;
     end;
   end;
 
   procedure FromDynArray;
   var
-    i: Integer;
+//DWF:
+    //i: Integer;
+    i: NativeInt;
+///DWF
     p: Pointer;
     pb: PByte;
     val: TValue;
