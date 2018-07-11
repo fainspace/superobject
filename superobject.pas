@@ -1484,24 +1484,25 @@ begin
     begin
       o := SO(obj.AsString);
       if not ObjectIsType(o, stString) then
-        Result := serialfromboolean(ctx, SO(obj.AsString), Value) else
+        Result := serialfromboolean(ctx, SO(obj.AsString), Value)
+      else
+      begin
+        s := o.AsString;
+        s := UpperCase(s.Trim([' ',#9, '"', #39]));
+        if (S = 'TRUE') or (S = '1') then
         begin
-          s := o.AsString;
-          s := UpperCase(s.Trim([' ',#9, '"', #39]));
-          if (S = 'TRUE') or (S = '1') then
-          begin
-            TValueData(Value).FAsSLong := 1;
-            Result := True
-          end
-          else
-          if (S = 'FALSE') or (S = '0') then
-          begin
-            TValueData(Value).FAsSLong := 0;
-            Result := True
-          end
-          else
-            Result := false;
-        end;
+          TValueData(Value).FAsSLong := 1;
+          Result := True
+        end
+        else
+        if (S = 'FALSE') or (S = '0') then
+        begin
+          TValueData(Value).FAsSLong := 0;
+          Result := True
+        end
+        else
+          Result := false;
+      end;
     end;
   else
     Result := False;
@@ -6102,31 +6103,29 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
     v: TValue;
     b: boolean;
   begin
+    Result := True;
     case ObjectGetType(obj) of
       stObject:
         begin
-          Result := false;
           if Value.Kind <> tkClass then
             Value := GetTypeData(TypeInfo).ClassType.Create;
           for f in Context.GetType(Value.AsObject.ClassType).GetFields do
-            if f.FieldType <> nil then
-            begin
-              v := TValue.Empty;
-              b :=  FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
-              if b then
-                f.SetValue(Value.AsObject, v);
-              Result := Result or b;
-            end;
-        end;
-      stNull:
-        begin
-          Value := nil;
-          Result := True;
+          if f.FieldType <> nil then
+          begin
+            v := TValue.Empty;
+            b := FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
+            if b then
+              f.SetValue(Value.AsObject, v)
+          end;
         end
+//      stNull:
+//        begin
+//          Value := nil;
+//          Result := True;
+//        end
     else
       // error
       Value := nil;
-      Result := False;
     end;
   end;
 
@@ -6137,35 +6136,26 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
     v: TValue;
     b: boolean;
   begin
-    Result := false;
+    Result := True;
     TValue.Make(nil, TypeInfo, Value);
-    case ObjectGetType(obj) of
-      stObject:
-          for f in Context.GetType(TypeInfo).GetFields do
-          begin
-            if (f.FieldType <> nil) then
-            begin
-              {$IFDEF VER210}
-              p := IValueData(TValueData(Value).FHeapData).GetReferenceToRawData;
-             {$ELSE}
-              p := TValueData(Value).FValueData.GetReferenceToRawData;
-             {$ENDIF}
-              b := FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
-              if b then
-                f.SetValue(p, v);
-              Result := Result or b;
-            end;
-          end;
-      stNull:
+    if ObjectIsType(obj, stObject) then
+    begin
+      for f in Context.GetType(TypeInfo).GetFields do
+      begin
+        if (f.FieldType <> nil) then
         begin
-          Value := nil;
-          Result := True;
+          {$IFDEF VER210}
+          p := IValueData(TValueData(Value).FHeapData).GetReferenceToRawData;
+          {$ELSE}
+          p := TValueData(Value).FValueData.GetReferenceToRawData;
+          {$ENDIF}
+          b := FromJson(f.FieldType.Handle, GetFieldDefault(f, obj.AsObject[GetFieldName(f)]), v);
+          if b then
+            f.SetValue(p, v);
         end
-      else
-        begin
-          Value := nil;
-          Result := False;
-        end;
+        else
+          Continue;
+      end;
     end;
   end;
 
