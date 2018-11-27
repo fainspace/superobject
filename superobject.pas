@@ -779,6 +779,7 @@ type
     Context: TRttiContext;
     SerialFromJson: TDictionary<PTypeInfo, TSerialFromJson>;
     SerialToJson: TDictionary<PTypeInfo, TSerialToJson>;
+    NotWriteEmptyField: Boolean;
     constructor Create; virtual;
     destructor Destroy; override;
     function FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject; var Value: TValue): Boolean; virtual;
@@ -843,7 +844,7 @@ uses
 {$ELSE}
   ,WinSock
 {$ENDIF}
-  ;
+  ,math;
 
 {$IFDEF DEBUG}
 var
@@ -6390,6 +6391,40 @@ begin
 end;
 
 function TSuperRttiContext.ToJson(var value: TValue; const index: ISuperObject): ISuperObject;
+
+  function IsEmptyValue(AValue: TValue): Boolean;
+  var
+    buf: Extended;
+  begin
+    Result := false;
+    case AValue.Kind of
+
+      tkEnumeration:
+        begin
+          if SameStr(String(AValue.TypeInfo.Name), 'Boolean') then
+            Result := not AValue.AsBoolean;
+//          else
+//            Result := AValue.AsInteger = 0;
+
+        end;
+      tkInteger:
+          Result := AValue.AsInteger = 0;
+      tkInt64:
+          Result := AValue.AsInt64 = 0;
+      tkChar, tkWChar:
+          Result := AValue.AsString = #0;
+      tkString, tkLString, tkWString, tkUString:
+          Result := AValue.AsString = '';
+      tkFloat:
+          begin
+            buf := AValue.AsExtended;
+            Result := IsNan(buf) or SameValue(buf, 0);
+          end;
+      tkArray, tkDynArray, tkClassRef, tkPointer, tkClass, tkUnknown:
+          Result := AValue.IsEmpty;
+    end;
+  end;
+
   procedure ToInt64;
   begin
     Result := TSuperObject.Create(SuperInt(Value.AsInt64));
@@ -6438,6 +6473,7 @@ function TSuperRttiContext.ToJson(var value: TValue; const index: ISuperObject):
           if f.FieldType <> nil then
           begin
             v := f.GetValue(Value.AsObject);
+            if NotWriteEmptyField and IsEmptyValue(v) then Continue;
             Result.AsObject[GetFieldName(f)] := ToJson(v, index);
           end
       end else
@@ -6468,6 +6504,7 @@ function TSuperRttiContext.ToJson(var value: TValue; const index: ISuperObject):
       v := f.GetValue(IValueData(TValueData(Value).FHeapData).GetReferenceToRawData);
 {$ELSE}
       v := f.GetValue(TValueData(Value).FValueData.GetReferenceToRawData);
+      if NotWriteEmptyField and IsEmptyValue(v) then Continue;
 {$ENDIF}
       Result.AsObject[GetFieldName(f)] := ToJson(v, index);
     end;
