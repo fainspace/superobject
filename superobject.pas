@@ -6011,7 +6011,7 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
         TypeData := GetTypeData(TypeInfo);
         if TypeData.MaxValue > TypeData.MinValue then
           Result := (i >= TypeData.MinValue) and (i <= TypeData.MaxValue) else
-          Result := (i >= TypeData.MinValue) and (i <= Int64(PCardinal(@TypeData.MaxValue)^));
+          Result := (NativeUInt(i) >= TypeData.MinValue) and (NativeUInt(i) <= Int64(PCardinal(@TypeData.MaxValue)^));
         if Result then
           TValue.Make(@i, TypeInfo, Value);
       end;
@@ -6343,8 +6343,10 @@ function TSuperRttiContext.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject
   const soguid: TGuid = '{4B86A9E3-E094-4E5A-954A-69048B7B6327}';
   var
     o: ISuperObject;
+    GUID: TGUID;
   begin
-    if CompareMem(@GetTypeData(TypeInfo).Guid, @soguid, SizeOf(TGUID)) then
+    GUID := GetTypeData(TypeInfo).Guid;
+    if CompareMem(@GUID, @soguid, SizeOf(TGUID)) then
     begin
       if obj <> nil then
         TValue.Make(@obj, TypeInfo, Value) else
@@ -6437,7 +6439,10 @@ function TSuperRttiContext.ToJson(var value: TValue; const index: ISuperObject):
 
   procedure ToInteger;
   begin
-    Result := TSuperObject.Create(TValueData(Value).FAsSLong);
+    if Value.TypeData^.MaxValue > Value.TypeData^.MinValue  then
+      Result := TSuperObject.Create(TValueData(Value).FAsSLong)
+    else
+      Result := TSuperObject.Create(TValueData(Value).FAsULong);
   end;
 
   procedure ToFloat;
